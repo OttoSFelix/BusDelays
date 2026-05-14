@@ -5,7 +5,8 @@ import sqlite3
 
 MQTT_HOST = "mqtt.hsl.fi"
 MQTT_PORT = 8883
-MQTT_TOPIC = "/hfp/v2/journey/+/+/+/+/01430/1056/#"
+# /<prefix>/<version>/<journey_type>/<temporal_type>/<event_type>/<transport_mode>/<operator_id>/<vehicle_number>/<route_id>/<direction_id>/<headsign>/<start_time>/<next_stop>/<geohash_level>/<geohash>/<sid>/#
+MQTT_TOPIC = "/hfp/v2/journey/+/+/+/+/01058/1056/#"
 DATATYPES = ['VP', 'ARS', 'PAS']
 VEHICLES = set()
 db_conn = sqlite3.connect('tram_data.db', check_same_thread=False)
