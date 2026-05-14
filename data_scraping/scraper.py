@@ -6,7 +6,7 @@ import sqlite3
 MQTT_HOST = "mqtt.hsl.fi"
 MQTT_PORT = 8883
 # /<prefix>/<version>/<journey_type>/<temporal_type>/<event_type>/<transport_mode>/<operator_id>/<vehicle_number>/<route_id>/<direction_id>/<headsign>/<start_time>/<next_stop>/<geohash_level>/<geohash>/<sid>/#
-MQTT_TOPIC = "/hfp/v2/journey/+/+/+/+/01058/1056/#"
+MQTT_TOPIC = "/hfp/v2/journey/+/+/+/+/01416/1056/#"
 DATATYPES = ['VP', 'ARS', 'PAS']
 VEHICLES = set()
 db_conn = sqlite3.connect('tram_data.db', check_same_thread=False)
@@ -64,19 +64,21 @@ def on_message(client, userdata, msg):
     except json.JSONDecodeError:
         print("Failed to decode JSON")
 
-client = mqtt.Client()
 
-client.on_connect = on_connect
-client.on_message = on_message
+if __name__ == "__main__":
+    client = mqtt.Client()
 
-client.tls_set(tls_version=ssl.PROTOCOL_TLS)
+    client.on_connect = on_connect
+    client.on_message = on_message
 
-try:
-    print(f"Connecting to {MQTT_HOST}:{MQTT_PORT}...")
-    client.connect(MQTT_HOST, MQTT_PORT, 60)
+    client.tls_set(tls_version=ssl.PROTOCOL_TLS)
 
-    client.loop_forever()
-except KeyboardInterrupt:
-    print("Disconnecting...")
-    client.disconnect()
-    db_conn.close()
+    try:
+        print(f"Connecting to {MQTT_HOST}:{MQTT_PORT}...")
+        client.connect(MQTT_HOST, MQTT_PORT, 60)
+
+        client.loop_forever()
+    except KeyboardInterrupt:
+        print("Disconnecting...")
+        client.disconnect()
+        db_conn.close()

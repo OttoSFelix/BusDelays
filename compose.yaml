@@ -5,8 +5,8 @@ services:
       build: .
       volumes:
         - ./data_scraping/tram_data.db:/app/tram_data.db
-    trainer:
-      image: nn_trainer
-      container_name: trainer
-      context: .
-      dockerfile: Dockerfile.training
+    # trainer:
+    #   image: nn_trainer
+    #   container_name: trainer
+    #   context: .
+    #   dockerfile: Dockerfile.training
