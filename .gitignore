@@ -6,6 +6,7 @@ __pycache__/
 # Individual files
 testing.py
 tramdelays/*
+training_loss.png
 
 # C extensions
 *.so

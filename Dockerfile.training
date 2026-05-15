@@ -2,8 +2,10 @@ FROM python:3.14-slim-trixie
 
 WORKDIR /app
 
-COPY data_scraping/bus_data.db neuralnet.py requirements_train.txt .
+COPY requirements_train.txt .
 
 RUN pip install -r requirements_train.txt
+
+COPY data_scraping/bus_data.db neuralnet.py .
 
 CMD ["python3", "neuralnet.py"]

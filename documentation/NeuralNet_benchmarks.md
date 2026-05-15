@@ -12,6 +12,7 @@ model = nn.Sequential(
 )
 `
 
+lr=0.001, epochs=3000, batch_size=32
 *Accuracy* **73%**
 
 `
@@ -26,4 +27,54 @@ model = nn.Sequential(
 )
 `
 
+lr=0.001, epochs=3000, batch_size=32
 *Accuracy* **64%**
+
+`
+model = nn.Sequential(
+    nn.Linear(4, 45),
+    nn.ReLU(),
+    nn.Linear(45, 45),
+    nn.ReLU(),
+    nn.Linear(45, 20),
+    nn.ReLU(),
+    nn.Linear(20, 1)
+)
+`
+
+lr=0.001, epochs=3000, batch_size=32
+*Accuracy* **72.8%**
+
+`
+model = nn.Sequential(
+    nn.Linear(4, 45),
+    nn.ReLU(),
+    nn.Linear(45, 45),
+    nn.ReLU(),
+    nn.Linear(45, 20),
+    nn.ReLU(),
+    nn.Linear(20, 1)
+)
+`
+
+lr=0.003, epochs=2500, batch_size=128
+*Accuracy* **78.6%**
+
+### From here on, time is splitted into two features: sin(time) and cos(time)
+
+`
+model = nn.Sequential(
+    nn.Linear(5, 45),
+    nn.ReLU(),
+    nn.Linear(45, 45),
+    nn.ReLU(),
+    nn.Linear(45, 20),
+    nn.ReLU(),
+    nn.Linear(20, 10),
+    nn.ReLU(),
+    nn.Linear(10, 1)
+)
+`
+
+lr=0.01, epochs=300, batch_size=128
+*Accuracy* **82.7%**

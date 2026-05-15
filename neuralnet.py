@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from termcolor import colored
 import sqlite3
 import math
+import os
 db_conn = sqlite3.connect('bus_data.db', check_same_thread=False)
 cursor = db_conn.cursor()
 
@@ -19,11 +20,13 @@ data = cursor.execute("SELECT * FROM vehicle_locations WHERE delay IS NOT NULL;"
 
 X_data = []
 for n in data:
-    time = math.sin(n[2]/(21600/math.pi))
+    time_sec = n[2]
+    time_sin = math.sin(time_sec * (2 * math.pi / 86400))
+    time_cos = math.cos(time_sec * (2 * math.pi / 86400))
     latitude = n[3]
     longitude = n[4]
     direction = float(n[5])
-    X_data.append([time, latitude, longitude, direction])
+    X_data.append([time_sin, time_cos, latitude, longitude, direction])
 
 X = torch.tensor(X_data, dtype=torch.float32) # the input data
 y = torch.tensor([n[6] for n in data], dtype=torch.float32) # the target
@@ -33,33 +36,34 @@ print(f'train sizes: {X_train.size(), y_train.size()}')
 print(f'test sizes: {X_test.size(), y_test.size()}')
 
 scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
-
-X_train_scaled[:, :3] = torch.tensor(scaler.fit_transform(X_train[:, :3]))
-X_test_scaled[:, :3] = torch.tensor(scaler.transform(X_test[:, :3]))
+X_train_scaled = X_train.clone()
+X_test_scaled = X_test.clone()
+X_train_scaled[:, 2:4] = torch.tensor(scaler.fit_transform(X_train[:, 2:4]), dtype=torch.float32)
+X_test_scaled[:, 2:4] = torch.tensor(scaler.transform(X_test[:, 2:4]), dtype=torch.float32)
 
 model = nn.Sequential(
-    nn.Linear(4, 32),
+    nn.Linear(5, 45),
     nn.ReLU(),
-    nn.Linear(32, 32),
+    nn.Linear(45, 45),
     nn.ReLU(),
-    nn.Linear(32, 16),
+    nn.Linear(45, 20),
     nn.ReLU(),
-    nn.Linear(16, 1)
+    nn.Linear(20, 10),
+    nn.ReLU(),
+    nn.Linear(10, 1)
 )
 print('Started learning...')
 net = NeuralNet(
     module=model,
     criterion=nn.MSELoss,
     optimizer=optim.Adam,
-    lr=0.001,
+    lr=0.01,
     max_epochs=3000,
-    batch_size=32,
+    batch_size=128,
     train_split=None
 )
 
-net.fit(X_train_scaled.astype(np.float32), y_train.view(-1, 1))
+net.fit(X_train_scaled, y_train.view(-1, 1))
 
 losses = net.history[:, 'train_loss']
 evaluations = []
@@ -73,7 +77,6 @@ with torch.no_grad():
     acc = abs(z_test - y_test.view(-1, 1)).float().mean()
 
 print(f"\nAverage error: {acc.item():.2f}")
-# print(f'Size of z: {z_test.size(0)}')
 
 plt.figure(figsize=(8, 4))
 plt.plot(losses, color='blue', linewidth=2)
@@ -82,9 +85,7 @@ plt.xlabel("Epoch")
 plt.ylabel("Logistic Loss")
 plt.grid(True, linestyle='--', alpha=0.6)
 
-fig, axes = plt.subplots(2, 5, figsize=(15, 6))
-fig.suptitle("Test Set Predictions (10 Samples)", fontsize=16, y=1.05)
-axes = axes.flatten()
+
 
 sample_y_true = y_test.view(-1, 1)
 print(f'test size = {y_test.size(0)}')
@@ -92,15 +93,19 @@ print(f'test size = {y_test.size(0)}')
 correct = 0
 wrong = 0
 for x in range(0, sample_y_true.size(0)-1, 10):
-    print(f'Batch {x}:')
+    # print(f'Batch {x}:')
     predicted_val = z_test[x].item()
     true_val = sample_y_true[x].item()
-    print(f'Test result: {predicted_val}, correct: {true_val}')
+    # print(f'Test result: {predicted_val}, correct: {true_val}')
 
     if abs(predicted_val - true_val) < 20:
-        print(colored('Correct!', 'green'))
+        # print(colored('Correct!', 'green'))
         correct += 1
     else:
-        print(colored('Wrong prediction!', 'red'))
+        # print(colored('Wrong prediction!', 'red'))
         wrong += 1
 print(f'Correct: {(correct / (correct + wrong))*100}%')
+save_path = os.path.join(os.path.dirname(__file__), 'training_loss.png')
+plt.tight_layout()
+plt.savefig(save_path, dpi=150)
+print(f'Saved plot to {save_path}')
