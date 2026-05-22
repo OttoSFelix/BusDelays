@@ -78,3 +78,54 @@ model = nn.Sequential(
 
 lr=0.01, epochs=3000, batch_size=128
 *Accuracy* **82.7%**
+
+`
+model = nn.Sequential(
+    nn.Linear(5, 128),
+    nn.ReLU(),
+    nn.Linear(128, 128),
+    nn.ReLU(),
+    nn.Linear(128, 64),
+    nn.ReLU(),
+    nn.Linear(64, 32),
+    nn.ReLU(),
+    nn.Linear(32, 1)
+)
+`
+
+lr=0.001, epochs=2000, batch_size=256
+*Accurary* **65.4%**
+
+`
+model = nn.Sequential(
+    nn.Linear(5, 128),
+    nn.ReLU(),
+    nn.Linear(128, 128),
+    nn.ReLU(),
+    nn.Linear(128, 64),
+    nn.ReLU(),
+    nn.Linear(64, 32),
+    nn.ReLU(),
+    nn.Linear(32, 1)
+)
+`
+
+lr=0.003, epochs=2000, batch_size=256
+*Accuracy* **83.7%**
+
+`
+model = nn.Sequential(
+    nn.Linear(5, 128),
+    nn.ReLU(),
+    nn.Linear(128, 128),
+    nn.LeakyReLU(),
+    nn.Linear(128, 64),
+    nn.ReLU(),
+    nn.Linear(64, 32),
+    nn.ReLU(),
+    nn.Linear(32, 1)
+)
+`
+
+lr=0.003, epochs=2000, batch_size=256
+*Accuracy* **75.5%**

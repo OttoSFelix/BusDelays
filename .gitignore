@@ -2,11 +2,15 @@
 __pycache__/
 *.py[codz]
 *$py.class
+.DS_Store
 
 # Individual files
 testing.py
 tramdelays/*
 training_loss.png
+data_scraping/bus_data.db
+data_scraping/bus_data.db-shm
+data_scraping/bus_data.db-wal
 
 # C extensions
 *.so
