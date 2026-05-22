@@ -71,18 +71,19 @@ def on_message(client, userdata, msg):
             longitude = data[datatype].get('long', 0)
             direction = data[datatype].get('dir', 0)
             delay = data[datatype].get('dl', 0)
+            vehicle = data[datatype].get('veh', 0)
             if direction == '2':
                 direction = 1.0
             else:
                 direction = 0.0
-            payload = {'datatype': datatype, 'time': time, 'latitude': latitude, 'longitude': longitude, 'direction': direction, 'delay': delay, 'route': route, 'date': date}
+            payload = {'datatype': datatype, 'time': time, 'latitude': latitude, 'longitude': longitude, 'direction': direction, 'delay': delay, 'route': route, 'date': date, 'vehicle': vehicle}
 
             cursor.execute('INSERT OR IGNORE INTO bus_routes (route) VALUES (?)', (payload['route'], ))
 
             cursor.execute('''
-                INSERT INTO vehicle_locations (datatype, time, latitude, longitude, direction, delay, route, date)
+                INSERT INTO vehicle_locations (datatype, time, latitude, longitude, direction, delay, route, date, vehicle)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (payload['datatype'], payload['time'], payload['latitude'], payload['longitude'], payload['direction'], payload['delay'], payload['route'], payload['date']))
+            ''', (payload['datatype'], payload['time'], payload['latitude'], payload['longitude'], payload['direction'], payload['delay'], payload['route'], payload['date'], payload['vehicle']))
             db_conn.commit()
     except json.JSONDecodeError:
         print("Failed to decode JSON")

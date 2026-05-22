@@ -4,7 +4,7 @@ import torch.optim as optim
 from skorch import NeuralNet
 from skorch.dataset import ValidSplit
 from sklearn.datasets import fetch_openml
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,15 +13,13 @@ import sqlite3
 import math
 import os
 
-class NeuralNetwork:
-    def __init__(self, route):
-        self.db_conn_data = sqlite3.connect('bus_data.db', check_same_thread=False)
-        self.cursor_data = self.db_conn_data.cursor()
-        self.route = route
+class PyTorchModel(nn.Module):
+    def __init__(self, num_unique_buses):
+        super().__init__()
+        self.bus_embedding = nn.Embedding(num_embeddings=num_unique_buses, embedding_dim=4)
         
-        self.weights = []
-        self.model = nn.Sequential(
-            nn.Linear(5, 128),
+        self.main_network = nn.Sequential(
+            nn.Linear(9, 128),
             nn.ReLU(),
             nn.Linear(128, 128),
             nn.ReLU(),
@@ -31,28 +29,41 @@ class NeuralNetwork:
             nn.ReLU(),
             nn.Linear(32, 1)
         )
-        self.net = NeuralNet(
-            module=self.model,
-            criterion=nn.MSELoss,
-            optimizer=optim.Adam,
-            lr=0.003,
-            max_epochs=3000,
-            batch_size=256,
-            train_split=ValidSplit(cv=5, stratified=False)
-        )
+
+    def forward(self, X):
+        continuous_features = X[:, :5]
+        bus_ids = X[:, 5].long() 
+        embedded_buses = self.bus_embedding(bus_ids)
+        combined_features = torch.cat((continuous_features, embedded_buses), dim=1)
+        return self.main_network(combined_features)
+
+class NeuralNetwork:
+    def __init__(self, route):
+        self.db_conn_data = sqlite3.connect('bus_data.db', check_same_thread=False)
+        self.cursor_data = self.db_conn_data.cursor()
+        self.route = route
+        
+        self.weights = []
 
     def train(self, graph: bool = False):
-        data = self.cursor_data.execute('SELECT * FROM vehicle_locations WHERE route = ? AND delay IS NOT NULL LIMIT 100000;', (self.route,)).fetchall()
+        data = self.cursor_data.execute('SELECT * FROM vehicle_locations WHERE route = ? AND delay IS NOT NULL ORDER BY RANDOM() LIMIT 100000;', (self.route,)).fetchall()
+
+        raw_vehicle_ids = [int(n[7]) for n in data]
+
+        encoder = LabelEncoder()
+        encoded_vehicle_ids = encoder.fit_transform(raw_vehicle_ids)
+        num_unique_buses = len(encoder.classes_)
 
         X_data = []
-        for n in data:
+        for i, n in enumerate(data):
             time_sec = n[2]
             time_sin = math.sin(time_sec * (2 * math.pi / 86400))
             time_cos = math.cos(time_sec * (2 * math.pi / 86400))
             latitude = n[3]
             longitude = n[4]
             direction = float(n[5])
-            X_data.append([time_sin, time_cos, latitude, longitude, direction])
+            vehicle = encoded_vehicle_ids[i]
+            X_data.append([time_sin, time_cos, latitude, longitude, direction, vehicle])
 
         X = torch.tensor(X_data, dtype=torch.float32)
         y = torch.tensor([n[6] for n in data], dtype=torch.float32)
@@ -67,16 +78,25 @@ class NeuralNetwork:
         X_train_scaled[:, 2:4] = torch.tensor(scaler.fit_transform(X_train[:, 2:4]), dtype=torch.float32)
         X_test_scaled[:, 2:4] = torch.tensor(scaler.transform(X_test[:, 2:4]), dtype=torch.float32)
 
+        self.model = PyTorchModel(num_unique_buses=num_unique_buses)
+
+        self.net = NeuralNet(
+            module=self.model,
+            criterion=nn.MSELoss,
+            optimizer=optim.Adam,
+            lr=0.003,
+            max_epochs=200,
+            batch_size=256,
+            train_split=ValidSplit(cv=0.2)
+        )
+
         self.net.fit(X_train_scaled, y_train.view(-1, 1))
 
         losses = self.net.history[:, 'train_loss']
-        evaluations = []
 
         self.model.eval()
         with torch.no_grad():
-            X_test_tensor = torch.tensor(X_test_scaled, dtype=torch.float32)
-
-            z_test = self.model(X_test_tensor)
+            z_test = self.model(X_test_scaled)
 
             acc = abs(z_test - y_test.view(-1, 1)).float().mean()
 
