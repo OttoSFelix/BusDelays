@@ -29,7 +29,8 @@ cursor.execute(f'''
         direction TEXT,
         delay REAL,
         route TEXT,
-        date TEXT
+        date TEXT,
+        vehicle TEXT
     )
 ''')
 db_conn.commit()
@@ -82,7 +83,7 @@ def on_message(client, userdata, msg):
 
             cursor.execute('''
                 INSERT INTO vehicle_locations (datatype, time, latitude, longitude, direction, delay, route, date, vehicle)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (payload['datatype'], payload['time'], payload['latitude'], payload['longitude'], payload['direction'], payload['delay'], payload['route'], payload['date'], payload['vehicle']))
             db_conn.commit()
     except json.JSONDecodeError:

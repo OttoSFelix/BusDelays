@@ -48,7 +48,7 @@ class NeuralNetwork:
     def train(self, graph: bool = False):
         data = self.cursor_data.execute('SELECT * FROM vehicle_locations WHERE route = ? AND delay IS NOT NULL ORDER BY RANDOM() LIMIT 100000;', (self.route,)).fetchall()
 
-        raw_vehicle_ids = [int(n[7]) for n in data]
+        raw_vehicle_ids = [int(n[9]) for n in data]
 
         encoder = LabelEncoder()
         encoded_vehicle_ids = encoder.fit_transform(raw_vehicle_ids)
