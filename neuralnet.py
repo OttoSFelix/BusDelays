@@ -19,15 +19,15 @@ class PyTorchModel(nn.Module):
         self.bus_embedding = nn.Embedding(num_embeddings=num_unique_buses, embedding_dim=4)
         
         self.main_network = nn.Sequential(
-            nn.Linear(9, 128),
+            nn.Linear(9, 256),
             nn.ReLU(),
-            nn.Linear(128, 128),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
             nn.ReLU(),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Linear(32, 1)
+            nn.Linear(64, 1)
         )
 
     def forward(self, X):
@@ -46,7 +46,19 @@ class NeuralNetwork:
         self.weights = []
 
     def train(self, graph: bool = False):
-        data = self.cursor_data.execute('SELECT * FROM vehicle_locations WHERE route = ? AND delay IS NOT NULL ORDER BY RANDOM() LIMIT 100000;', (self.route,)).fetchall()
+        print('Preparing data...')
+        data = self.cursor_data.execute('''
+            SELECT * FROM vehicle_locations 
+            WHERE route = ? 
+            AND delay IS NOT NULL 
+            AND time IS NOT NULL
+            AND latitude IS NOT NULL
+            AND longitude IS NOT NULL
+            AND direction IS NOT NULL
+            AND vehicle IS NOT NULL
+            ORDER BY RANDOM()
+            LIMIT 300000
+        ''', (self.route,)).fetchall()
 
         raw_vehicle_ids = [int(n[9]) for n in data]
 
@@ -86,7 +98,7 @@ class NeuralNetwork:
             optimizer=optim.Adam,
             lr=0.003,
             max_epochs=200,
-            batch_size=256,
+            batch_size=512,
             train_split=ValidSplit(cv=0.2)
         )
 
@@ -133,5 +145,5 @@ class NeuralNetwork:
         torch.save(self.model.state_dict(), f'model_route_{self.route}.pth')
 
 if __name__ == '__main__':
-    network = NeuralNetwork('56')
-    network.train()
+    network = NeuralNetwork('542')
+    network.train(graph=True)

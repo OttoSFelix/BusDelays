@@ -14,6 +14,7 @@ services:
         dockerfile: Dockerfile.training
       volumes:
         - ./training_loss.png:/app/training_loss.png
+        - ./data_scraping/bus_data.db:/app/bus_data.db
     watcher:
       image: data_watcher
       container_name: watcher

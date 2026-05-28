@@ -6,6 +6,6 @@ COPY requirements_train.txt .
 
 RUN pip install -r requirements_train.txt
 
-COPY data_scraping/bus_data.db neuralnet.py .
+COPY neuralnet.py .
 
 CMD ["python3", "neuralnet.py"]
