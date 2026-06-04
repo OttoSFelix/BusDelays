@@ -15,6 +15,7 @@ services:
       volumes:
         - ./training_loss.png:/app/training_loss.png
         - ./data_scraping/bus_data.db:/app/bus_data.db
+        - ./parameters:/app/parameters
     watcher:
       image: data_watcher
       container_name: watcher
@@ -29,3 +30,11 @@ services:
       restart: always
       depends_on:
         - scraper
+    inference:
+      image: model_inference
+      container_name: inference
+      build:
+        context: .
+        dockerfile: Dockerfile.inference
+      volumes:
+      - ./parameters:/app/parameters

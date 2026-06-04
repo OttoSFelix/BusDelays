@@ -1,0 +1,11 @@
+FROM python:3.14-slim-trixie
+
+WORKDIR /app
+
+COPY requirements_train.txt requirements_data.txt .
+
+RUN pip install -r requirements_train.txt && pip install -r requirements_data.txt
+
+COPY inference.py neuralnet.py .
+
+CMD ["python3", "inference.py"]

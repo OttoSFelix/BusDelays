@@ -12,6 +12,7 @@ from termcolor import colored
 import sqlite3
 import math
 import os
+import joblib
 
 class PyTorchModel(nn.Module):
     def __init__(self, num_unique_buses):
@@ -62,9 +63,9 @@ class NeuralNetwork:
 
         raw_vehicle_ids = [int(n[9]) for n in data]
 
-        encoder = LabelEncoder()
-        encoded_vehicle_ids = encoder.fit_transform(raw_vehicle_ids)
-        num_unique_buses = len(encoder.classes_)
+        self.encoder = LabelEncoder()
+        encoded_vehicle_ids = self.encoder.fit_transform(raw_vehicle_ids)
+        num_unique_buses = len(self.encoder.classes_)
 
         X_data = []
         for i, n in enumerate(data):
@@ -84,11 +85,11 @@ class NeuralNetwork:
         print(f'train sizes: {X_train.size(), y_train.size()}')
         print(f'test sizes: {X_test.size(), y_test.size()}')
 
-        scaler = StandardScaler()
+        self.scaler = StandardScaler()
         X_train_scaled = X_train.clone()
         X_test_scaled = X_test.clone()
-        X_train_scaled[:, 2:4] = torch.tensor(scaler.fit_transform(X_train[:, 2:4]), dtype=torch.float32)
-        X_test_scaled[:, 2:4] = torch.tensor(scaler.transform(X_test[:, 2:4]), dtype=torch.float32)
+        X_train_scaled[:, 2:4] = torch.tensor(self.scaler.fit_transform(X_train[:, 2:4]), dtype=torch.float32)
+        X_test_scaled[:, 2:4] = torch.tensor(self.scaler.transform(X_test[:, 2:4]), dtype=torch.float32)
 
         self.model = PyTorchModel(num_unique_buses=num_unique_buses)
 
@@ -142,8 +143,11 @@ class NeuralNetwork:
             print(f'Saved plot to {save_path}')
 
     def save_weights(self):
-        torch.save(self.model.state_dict(), f'model_route_{self.route}.pth')
+        torch.save(self.model.state_dict(), f'./parameters/model_route_{self.route}.pth')
+        joblib.dump(self.scaler, f'./parameters/scaler_route_{self.route}.joblib')
+        joblib.dump(self.encoder, f'./parameters/encoder_route_{self.route}.joblib')
 
 if __name__ == '__main__':
-    network = NeuralNetwork('542')
+    network = NeuralNetwork('71')
     network.train(graph=True)
+    network.save_weights()
