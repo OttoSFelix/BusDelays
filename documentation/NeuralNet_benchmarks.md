@@ -129,3 +129,22 @@ model = nn.Sequential(
 
 lr=0.003, epochs=2000, batch_size=256
 *Accuracy* **75.5%**
+
+### From this point forward, the bus id is added in 4 embeddings and the number of epochs is greatly reduced to avoid overfitting
+
+`
+self.main_network = nn.Sequential(
+    nn.Linear(9, 256),
+    nn.ReLU(),
+    nn.Linear(256, 256),
+    nn.ReLU(),
+    nn.Linear(256, 128),
+    nn.ReLU(),
+    nn.Linear(128, 64),
+    nn.ReLU(),
+    nn.Linear(64, 1)
+)
+`
+
+lr=0.003, epochs=200, batch_size=512
+*Accuracy* **49.7**
