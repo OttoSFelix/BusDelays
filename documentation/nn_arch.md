@@ -23,6 +23,6 @@ This is the specific vehicle id of a bus. It is used so that the model can disti
 
 ## Network size and form
 
-![network](https://github.com/OttoSFelix/BusDelays/tree/main/documentation/nn_form.png)
+![network](nn_form.png)
 
 The form of the neural network is visualised above. The input layer has 9 neurons, the first hidden layers has 256 neurons, the second hidden layer has 256 neurons, the third hidden layer has 128 neurons, the fourth hidden layer has 64 neurons and the network outputs a single value.
