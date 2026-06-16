@@ -6,12 +6,29 @@ import ssl
 from neuralnet import PyTorchModel
 import math
 from time import sleep
+import numpy as np
 
 MQTT_HOST = "mqtt.hsl.fi"
 MQTT_PORT = 8883
-MQTT_TOPIC = '/hfp/v2/journey/ongoing/+/bus/+/+/1071/#'
+MQTT_TOPIC = '/hfp/v2/journey/ongoing/+/bus/+/+/2510/#'
 DATATYPES = ['VP', 'ARS', 'PAS']
 RESULTS = []
+ROUTE = '510'
+
+print("Loading model and scalers into memory...")
+weight_path = f'./parameters/model_route_{ROUTE}.pth'
+STATE_DICT = torch.load(weight_path, weights_only=True)
+
+SCALER = joblib.load(f'./parameters/scaler_route_{ROUTE}.joblib')
+ENCODER = joblib.load(f'./parameters/encoder_route_{ROUTE}.joblib')
+
+num_unique_buses = STATE_DICT['bus_embedding.weight'].shape[0]
+
+MODEL = PyTorchModel(num_unique_buses=num_unique_buses)
+MODEL.load_state_dict(STATE_DICT)
+MODEL.eval()
+print("Model loaded successfully. Starting stream...")
+
 
 def parse_time(timestamp: str, utc: bool = True, date: bool = True):
     timedata = timestamp
@@ -33,7 +50,6 @@ def parse_time(timestamp: str, utc: bool = True, date: bool = True):
 def on_connect(client, userdata, flags, reason_code, properties):
     print(f"Connected with result code {reason_code}")
     client.subscribe(MQTT_TOPIC)
-    print(f"Subscribed to topic: {MQTT_TOPIC}")
 
 def on_message(client, userdata, msg):
     raw_data = msg.payload
@@ -41,8 +57,7 @@ def on_message(client, userdata, msg):
         data = json.loads(raw_data)
         datatype = list(data.keys())[0]
         if datatype in DATATYPES:
-            route = data[datatype].get('desi', 0)
-            time = parse_time(data[datatype]['tst'])[1]
+            time = parse_time(data[datatype].get('tst', 0))[1]
             latitude = data[datatype].get('lat', 0)
             longitude = data[datatype].get('long', 0)
             direction = data[datatype].get('dir', 0)
@@ -52,61 +67,56 @@ def on_message(client, userdata, msg):
                 direction = 1.0
             else:
                 direction = 0.0
+
             payload = {'time': time, 'latitude': latitude, 'longitude': longitude, 'direction': direction, 'vehicle': vehicle}
-            RESULTS.append((delay, load_and_infer(route, payload)))
+            valid = True
+            for item in payload.values():
+                if item is None:
+                    valid = False
+            if valid:
+                if delay is not None:
+                    RESULTS.append((delay, perform_inference(payload)))
 
     except json.JSONDecodeError:
         print("Failed to decode JSON")
 
 
-def load_and_infer(route, data):
-    weight_path = f'./parameters/model_route_{route}.pth'
-    state_dict = torch.load(weight_path, weights_only=True)
-    num_unique_buses = state_dict['bus_embedding.weight'].shape[0]
-
-    scaler = joblib.load(f'./parameters/scaler_route_{route}.joblib')
-    encoder = joblib.load(f'./parameters/encoder_route_{route}.joblib')
+def perform_inference(data):
     try:
-        vehicle_id = encoder.transform([data['vehicle']])[0]
+        vehicle_id = ENCODER.transform([int(data['vehicle'])])[0]
     except ValueError:
-        print("Warning: Unseen vehicle ID! Falling back to default vehicle 0.")
-        vehicle_id = 0
+        vehicle_id = ENCODER.transform([-1])[0]
 
     time_sec = data['time']
     time_sin = math.sin(time_sec * (2 * math.pi / 86400))
     time_cos = math.cos(time_sec * (2 * math.pi / 86400))
 
-    model = PyTorchModel(num_unique_buses=num_unique_buses)
-    model.load_state_dict(state_dict)
-    model.eval()
     dummy_input = torch.tensor([[time_sin, time_cos, data['latitude'], data['longitude'], data['direction'], vehicle_id]], dtype=torch.float32)
-    dummy_input[:, 2:4] = torch.tensor(scaler.transform(dummy_input[:, 2:4]), dtype=torch.float32)
+    dummy_input[:, 2:4] = torch.tensor(SCALER.transform(dummy_input[:, 2:4]), dtype=torch.float32)
+    
     with torch.no_grad():
-        prediction = model(dummy_input)
+        prediction = MODEL(dummy_input)
 
     return prediction.item()
 
 
 if __name__ == '__main__':
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-
     client.on_connect = on_connect
     client.on_message = on_message
-
     client.tls_set(tls_version=ssl.PROTOCOL_TLS)
-
 
     print(f"Connecting to {MQTT_HOST}:{MQTT_PORT}...")
     client.connect(MQTT_HOST, MQTT_PORT, 60)
 
     client.loop_start()
-
-    sleep(20)
-
+    sleep(360)
     client.loop_stop()
 
+    errors = []
     for result in RESULTS:
-        print(f'{result[0]} ----- {result[1]}')
-
-
-# {"VP":{"desi":"554","dir":"2","oper":12,"veh":2603,"tst":"2026-06-03T18:50:48.955Z","tsi":1780512648,"spd":11.25,"hdg":231,"lat":60.211535,"long":25.080516,"acc":0.11,"dl":-168,"odo":25814,"drst":0,"oday":"2026-06-03","jrn":721,"line":263,"start":"21:02","loc":"GPS","stop":1453118,"route":"2554","occu":0}}
+        if result[1] is not None:
+            print(f'Actual: {result[0]} ----- Predicted: {result[1]:.1f}')
+            errors.append(abs(result[0] - result[1]))
+    
+    print(f'Mean error: {np.mean(errors):.2f}')

@@ -17,10 +17,10 @@ import joblib
 class PyTorchModel(nn.Module):
     def __init__(self, num_unique_buses):
         super().__init__()
-        self.bus_embedding = nn.Embedding(num_embeddings=num_unique_buses, embedding_dim=4)
-        
+        self.bus_embedding = nn.Embedding(num_embeddings=num_unique_buses, embedding_dim=8)
+
         self.main_network = nn.Sequential(
-            nn.Linear(9, 256),
+            nn.Linear(13, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -58,14 +58,17 @@ class NeuralNetwork:
             AND direction IS NOT NULL
             AND vehicle IS NOT NULL
             ORDER BY RANDOM()
-            LIMIT 300000
         ''', (self.route,)).fetchall()
 
         raw_vehicle_ids = [int(n[9]) for n in data]
 
+        raw_vehicle_ids.append(-1)
+
         self.encoder = LabelEncoder()
         encoded_vehicle_ids = self.encoder.fit_transform(raw_vehicle_ids)
         num_unique_buses = len(self.encoder.classes_)
+
+        encoded_vehicle_ids = encoded_vehicle_ids[:-1]
 
         X_data = []
         for i, n in enumerate(data):
@@ -99,7 +102,7 @@ class NeuralNetwork:
             optimizer=optim.Adam,
             lr=0.003,
             max_epochs=200,
-            batch_size=512,
+            batch_size=2048,
             train_split=ValidSplit(cv=0.2)
         )
 
@@ -107,27 +110,38 @@ class NeuralNetwork:
 
         losses = self.net.history[:, 'train_loss']
 
-        self.model.eval()
-        with torch.no_grad():
-            z_test = self.model(X_test_scaled)
+        try:
+            z_test_np = self.net.predict(X_test_scaled)
+            z_test = torch.tensor(z_test_np)
 
             acc = abs(z_test - y_test.view(-1, 1)).float().mean()
+            error = False
+        except Exception as e:
+            print(f"Error during evaluation: {e}")
+            acc = 0
+            error = True
 
-        print(f"\nAverage error: {acc.item():.2f}")
-        sample_y_true = y_test.view(-1, 1)
-        print(f'test size = {y_test.size(0)}')
+        if error:
+            print('Error during average error')
+        else:
+            print(f"\nAverage error: {acc.item():.2f}")
+            sample_y_true = y_test.view(-1, 1)
+            print(f'test size = {y_test.size(0)}')
 
-        correct = 0
-        wrong = 0
-        for x in range(0, sample_y_true.size(0)-1, 10):
-            predicted_val = z_test[x].item()
-            true_val = sample_y_true[x].item()
+        try:
+            correct = 0
+            wrong = 0
+            for x in range(0, sample_y_true.size(0)-1, 10):
+                predicted_val = z_test[x].item()
+                true_val = sample_y_true[x].item()
 
-            if abs(predicted_val - true_val) < 20:
-                correct += 1
-            else:
-                wrong += 1
-        print(f'Correct: {(correct / (correct + wrong))*100}%')
+                if abs(predicted_val - true_val) < 20:
+                    correct += 1
+                else:
+                    wrong += 1
+            print(f'Correct: {(correct / (correct + wrong))*100}%')
+        except Exception as e:
+            print(f'Error calculating accuracy: {e}')
 
 
         if graph:
@@ -143,11 +157,12 @@ class NeuralNetwork:
             print(f'Saved plot to {save_path}')
 
     def save_weights(self):
-        torch.save(self.model.state_dict(), f'./parameters/model_route_{self.route}.pth')
+        torch.save(self.net.module_.state_dict(), f'./parameters/model_route_{self.route}.pth')
         joblib.dump(self.scaler, f'./parameters/scaler_route_{self.route}.joblib')
         joblib.dump(self.encoder, f'./parameters/encoder_route_{self.route}.joblib')
+        print(f'Weights saved for route {self.route}.')
 
 if __name__ == '__main__':
-    network = NeuralNetwork('71')
+    network = NeuralNetwork('510')
     network.train(graph=True)
     network.save_weights()
