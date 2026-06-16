@@ -12,7 +12,7 @@ run scraper with:
 
 ### trainer
 
-This service is used to train the model. It fetches data from bus_data.db and completes the full training with one docker command. This service uses [neuralnet.py](../neuralnet.py) as its main script and uses a volume to fetch data from bus_data.db (ignored by git). The dockerfile for scraper is [Dockerfile.training](../Dockerfile.training) More about the training and [neuralnet.py](../neuralnet.py) can be read from [Neural network architecture documentation](nn_arch.dm).
+This service is used to train the model. It fetches data from bus_data.db and completes the full training with one docker command. This service uses [neuralnet.py](../neuralnet.py) as its main script and uses a volume to fetch data from bus_data.db (ignored by git). The dockerfile for scraper is [Dockerfile.training](../Dockerfile.training) More about the training and [neuralnet.py](../neuralnet.py) can be read from [Neural network architecture documentation](nn_arch.md).
 
 run trainer with:
 `docker compose up --build trainer`
