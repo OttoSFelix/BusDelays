@@ -51,13 +51,22 @@ def on_connect(client, userdata, flags, reason_code, properties):
     print(f"Connected with result code {reason_code}")
     client.subscribe(MQTT_TOPIC)
 
+last_known_delays = {"0.0": 0.0, "1.0": 0.0}
+last_seen_date = None
+
 def on_message(client, userdata, msg):
+    global last_seen_date
     raw_data = msg.payload
     try:
         data = json.loads(raw_data)
         datatype = list(data.keys())[0]
         if datatype in DATATYPES:
-            time = parse_time(data[datatype].get('tst', 0))[1]
+            tst_val = data[datatype].get('tst')
+            if tst_val is None:
+                date, time = "2026-06-16", 0.0
+            else:
+                date, time = parse_time(tst_val)
+
             latitude = data[datatype].get('lat', 0)
             longitude = data[datatype].get('long', 0)
             direction = data[datatype].get('dir', 0)
@@ -68,6 +77,22 @@ def on_message(client, userdata, msg):
             else:
                 direction = 0.0
 
+            # Reset dictionary if date changes (first bus of the day)
+            if last_seen_date is not None and date != last_seen_date:
+                last_known_delays["0.0"] = 0.0
+                last_known_delays["1.0"] = 0.0
+            last_seen_date = date
+
+            dir_key = str(direction)
+            lag_delay = last_known_delays.get(dir_key, 0.0)
+
+            # Update dictionary with current delay for the next bus
+            current_delay = float(delay) if delay is not None else 0.0
+            if lag_delay == 0.0:
+                last_known_delays[dir_key] = current_delay
+            else:
+                last_known_delays[dir_key] = (0.9 * lag_delay) + (0.1 * current_delay)
+
             payload = {'time': time, 'latitude': latitude, 'longitude': longitude, 'direction': direction, 'vehicle': vehicle}
             valid = True
             for item in payload.values():
@@ -75,13 +100,13 @@ def on_message(client, userdata, msg):
                     valid = False
             if valid:
                 if delay is not None:
-                    RESULTS.append((delay, perform_inference(payload)))
+                    RESULTS.append((delay, perform_inference(payload, lag_delay)))
 
     except json.JSONDecodeError:
         print("Failed to decode JSON")
 
 
-def perform_inference(data):
+def perform_inference(data, lag_delay):
     try:
         vehicle_id = ENCODER.transform([int(data['vehicle'])])[0]
     except ValueError:
@@ -91,8 +116,8 @@ def perform_inference(data):
     time_sin = math.sin(time_sec * (2 * math.pi / 86400))
     time_cos = math.cos(time_sec * (2 * math.pi / 86400))
 
-    dummy_input = torch.tensor([[time_sin, time_cos, data['latitude'], data['longitude'], data['direction'], vehicle_id]], dtype=torch.float32)
-    dummy_input[:, 2:4] = torch.tensor(SCALER.transform(dummy_input[:, 2:4]), dtype=torch.float32)
+    dummy_input = torch.tensor([[time_sin, time_cos, data['latitude'], data['longitude'], lag_delay, data['direction'], vehicle_id]], dtype=torch.float32)
+    dummy_input[:, 2:5] = torch.tensor(SCALER.transform(dummy_input[:, 2:5]), dtype=torch.float32)
     
     with torch.no_grad():
         prediction = MODEL(dummy_input)

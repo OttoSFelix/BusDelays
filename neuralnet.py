@@ -20,7 +20,7 @@ class PyTorchModel(nn.Module):
         self.bus_embedding = nn.Embedding(num_embeddings=num_unique_buses, embedding_dim=8)
 
         self.main_network = nn.Sequential(
-            nn.Linear(13, 256),
+            nn.Linear(14, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -32,8 +32,8 @@ class PyTorchModel(nn.Module):
         )
 
     def forward(self, X):
-        continuous_features = X[:, :5]
-        bus_ids = X[:, 5].long() 
+        continuous_features = X[:, :6]
+        bus_ids = X[:, 6].long()
         embedded_buses = self.bus_embedding(bus_ids)
         combined_features = torch.cat((continuous_features, embedded_buses), dim=1)
         return self.main_network(combined_features)
@@ -43,20 +43,21 @@ class NeuralNetwork:
         self.db_conn_data = sqlite3.connect('bus_data.db', check_same_thread=False)
         self.cursor_data = self.db_conn_data.cursor()
         self.route = route
-        
+
         self.weights = []
 
     def train(self, graph: bool = False):
         print('Preparing data...')
         data = self.cursor_data.execute('''
-            SELECT * FROM vehicle_locations 
-            WHERE route = ? 
-            AND delay IS NOT NULL 
+            SELECT id, datatype, time, latitude, longitude, direction, delay, route, date, vehicle, lag_delay FROM vehicle_locations
+            WHERE route = ?
+            AND delay IS NOT NULL
             AND time IS NOT NULL
             AND latitude IS NOT NULL
             AND longitude IS NOT NULL
             AND direction IS NOT NULL
             AND vehicle IS NOT NULL
+            AND lag_delay IS NOT NULL
             ORDER BY RANDOM()
         ''', (self.route,)).fetchall()
 
@@ -77,9 +78,10 @@ class NeuralNetwork:
             time_cos = math.cos(time_sec * (2 * math.pi / 86400))
             latitude = n[3]
             longitude = n[4]
+            lag_delay = float(n[10])
             direction = float(n[5])
             vehicle = encoded_vehicle_ids[i]
-            X_data.append([time_sin, time_cos, latitude, longitude, direction, vehicle])
+            X_data.append([time_sin, time_cos, latitude, longitude, lag_delay, direction, vehicle])
 
         X = torch.tensor(X_data, dtype=torch.float32)
         y = torch.tensor([n[6] for n in data], dtype=torch.float32)
@@ -91,8 +93,8 @@ class NeuralNetwork:
         self.scaler = StandardScaler()
         X_train_scaled = X_train.clone()
         X_test_scaled = X_test.clone()
-        X_train_scaled[:, 2:4] = torch.tensor(self.scaler.fit_transform(X_train[:, 2:4]), dtype=torch.float32)
-        X_test_scaled[:, 2:4] = torch.tensor(self.scaler.transform(X_test[:, 2:4]), dtype=torch.float32)
+        X_train_scaled[:, 2:5] = torch.tensor(self.scaler.fit_transform(X_train[:, 2:5]), dtype=torch.float32)
+        X_test_scaled[:, 2:5] = torch.tensor(self.scaler.transform(X_test[:, 2:5]), dtype=torch.float32)
 
         self.model = PyTorchModel(num_unique_buses=num_unique_buses)
 
@@ -101,7 +103,7 @@ class NeuralNetwork:
             criterion=nn.MSELoss,
             optimizer=optim.Adam,
             lr=0.003,
-            max_epochs=200,
+            max_epochs=100,
             batch_size=2048,
             train_split=ValidSplit(cv=0.2)
         )
