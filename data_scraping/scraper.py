@@ -4,13 +4,23 @@ import json
 import sqlite3
 import signal
 import sys
+import os
 
 MQTT_HOST = "mqtt.hsl.fi"
 MQTT_PORT = 8883
 # /<prefix>/<version>/<journey_type>/<temporal_type>/<event_type>/<transport_mode>/<operator_id>/<vehicle_number>/<route_id>/<direction_id>/<headsign>/<start_time>/<next_stop>/<geohash_level>/<geohash>/<sid>/#
 MQTT_TOPIC = '/hfp/v2/journey/ongoing/+/bus/+/+/+/#'
 DATATYPES = ['VP', 'ARS', 'PAS']
-db_conn = sqlite3.connect('bus_data.db', check_same_thread=False)
+routes_path = 'data_scraping/routes.txt' if os.path.exists('data_scraping/routes.txt') else 'routes.txt'
+ROUTES = []
+with open(routes_path, 'r') as file:
+    for route in file:
+        route = route.strip()
+        ROUTES.append(route)
+print(ROUTES)
+
+db_path = 'data_scraping/bus_data.db' if os.path.exists('data_scraping') else 'bus_data.db'
+db_conn = sqlite3.connect(db_path, check_same_thread=False)
 db_conn.execute('PRAGMA journal_mode=WAL;')
 cursor = db_conn.cursor()
 
@@ -61,18 +71,21 @@ def on_connect(client, userdata, flags, rc):
     print(f"Subscribed to topic: {MQTT_TOPIC}")
 
 
-last_known_delays = {"0.0": 0.0, "1.0": 0.0}
+last_known_delays = {r: {"0.0": 0.0, "1.0": 0.0} for r in ROUTES}
 last_seen_date = None
 
 
 def on_message(client, userdata, msg):
     global last_seen_date
+    global last_known_delays
     raw_data = msg.payload
     try:
         data = json.loads(raw_data)
         datatype = list(data.keys())[0]
         if datatype in DATATYPES:
             route = data[datatype].get('desi', 0)
+            if route not in ROUTES:
+                return
             date, time = parse_time(data[datatype]['tst'])
             latitude = data[datatype].get('lat', 0)
             longitude = data[datatype].get('long', 0)
@@ -85,15 +98,14 @@ def on_message(client, userdata, msg):
                 direction = 0.0
 
             if last_seen_date is not None and date != last_seen_date:
-                last_known_delays["0.0"] = 0.0
-                last_known_delays["1.0"] = 0.0
+                last_known_delays = {r: {"0.0": 0.0, "1.0": 0.0} for r in ROUTES}
             last_seen_date = date
 
             dir_key = str(direction)
-            lag_delay = last_known_delays.get(dir_key, 0.0)
+            lag_delay = last_known_delays[route].get(dir_key, 0.0)
 
             current_delay = float(delay) if delay is not None else 0.0
-            last_known_delays[dir_key] = current_delay
+            last_known_delays[route][dir_key] = current_delay
 
             payload = {
                 'datatype': datatype,

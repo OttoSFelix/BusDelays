@@ -13,6 +13,7 @@ import sqlite3
 import math
 import os
 import joblib
+import random
 
 class PyTorchModel(nn.Module):
     def __init__(self, num_unique_buses):
@@ -40,7 +41,8 @@ class PyTorchModel(nn.Module):
 
 class NeuralNetwork:
     def __init__(self, route):
-        self.db_conn_data = sqlite3.connect('bus_data.db', check_same_thread=False)
+        db_path = 'data_scraping/bus_data.db' if os.path.exists('data_scraping') else 'bus_data.db'
+        self.db_conn_data = sqlite3.connect(db_path, check_same_thread=False)
         self.cursor_data = self.db_conn_data.cursor()
         self.route = route
 
@@ -58,7 +60,7 @@ class NeuralNetwork:
             AND direction IS NOT NULL
             AND vehicle IS NOT NULL
             AND lag_delay IS NOT NULL
-            ORDER BY RANDOM()
+            ORDER BY id ASC
         ''', (self.route,)).fetchall()
 
         raw_vehicle_ids = [int(n[9]) for n in data]
@@ -68,6 +70,8 @@ class NeuralNetwork:
         self.encoder = LabelEncoder()
         encoded_vehicle_ids = self.encoder.fit_transform(raw_vehicle_ids)
         num_unique_buses = len(self.encoder.classes_)
+
+        unknown_token_index = self.encoder.transform([-1])[0]
 
         encoded_vehicle_ids = encoded_vehicle_ids[:-1]
 
@@ -81,12 +85,14 @@ class NeuralNetwork:
             lag_delay = float(n[10])
             direction = float(n[5])
             vehicle = encoded_vehicle_ids[i]
+            if random.random() < 0.05:
+                vehicle = unknown_token_index
             X_data.append([time_sin, time_cos, latitude, longitude, lag_delay, direction, vehicle])
 
         X = torch.tensor(X_data, dtype=torch.float32)
         y = torch.tensor([n[6] for n in data], dtype=torch.float32)
 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
         print(f'train sizes: {X_train.size(), y_train.size()}')
         print(f'test sizes: {X_test.size(), y_test.size()}')
 
@@ -96,25 +102,36 @@ class NeuralNetwork:
         X_train_scaled[:, 2:5] = torch.tensor(self.scaler.fit_transform(X_train[:, 2:5]), dtype=torch.float32)
         X_test_scaled[:, 2:5] = torch.tensor(self.scaler.transform(X_test[:, 2:5]), dtype=torch.float32)
 
+        self.y_scaler = StandardScaler()
+        
+        y_train_reshaped = y_train.numpy().reshape(-1, 1)
+        y_test_reshaped = y_test.numpy().reshape(-1, 1)
+        y_train_scaled = torch.tensor(self.y_scaler.fit_transform(y_train_reshaped), dtype=torch.float32)
+
         self.model = PyTorchModel(num_unique_buses=num_unique_buses)
+
+        learning_rate = 0.001
+        batch_size = 2048
 
         self.net = NeuralNet(
             module=self.model,
             criterion=nn.MSELoss,
             optimizer=optim.Adam,
-            lr=0.003,
-            max_epochs=100,
-            batch_size=2048,
+            lr=learning_rate,
+            max_epochs=50,
+            batch_size=batch_size,
             train_split=ValidSplit(cv=0.2)
         )
 
-        self.net.fit(X_train_scaled, y_train.view(-1, 1))
+        self.net.fit(X_train_scaled, y_train_scaled)
 
         losses = self.net.history[:, 'train_loss']
 
         try:
-            z_test_np = self.net.predict(X_test_scaled)
-            z_test = torch.tensor(z_test_np)
+            z_test_scaled_np = self.net.predict(X_test_scaled)
+
+            z_test_unscaled_np = self.y_scaler.inverse_transform(z_test_scaled_np)
+            z_test = torch.tensor(z_test_unscaled_np)
 
             acc = abs(z_test - y_test.view(-1, 1)).float().mean()
             error = False
@@ -142,6 +159,7 @@ class NeuralNetwork:
                 else:
                     wrong += 1
             print(f'Correct: {(correct / (correct + wrong))*100}%')
+            print(f'Learning rate: {learning_rate}, batch_size: {batch_size}')
         except Exception as e:
             print(f'Error calculating accuracy: {e}')
 
@@ -162,6 +180,7 @@ class NeuralNetwork:
         torch.save(self.net.module_.state_dict(), f'./parameters/model_route_{self.route}.pth')
         joblib.dump(self.scaler, f'./parameters/scaler_route_{self.route}.joblib')
         joblib.dump(self.encoder, f'./parameters/encoder_route_{self.route}.joblib')
+        joblib.dump(self.y_scaler, f'./parameters/y_scaler_route_{self.route}.joblib')
         print(f'Weights saved for route {self.route}.')
 
 if __name__ == '__main__':

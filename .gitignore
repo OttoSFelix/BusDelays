@@ -11,6 +11,7 @@ training_loss.png
 data_scraping/bus_data.db
 data_scraping/bus_data.db-shm
 data_scraping/bus_data.db-wal
+.agents/rules
 
 # C extensions
 *.so

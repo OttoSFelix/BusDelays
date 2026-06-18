@@ -4,7 +4,7 @@ services:
       container_name: scraper
       build: .
       volumes:
-        - ./data_scraping/bus_data.db:/app/bus_data.db
+        - ./data_scraping:/app/data_scraping
         - ./data_scraping/scraper.py:/app/scraper.py
     trainer:
       image: nn_trainer
@@ -14,7 +14,7 @@ services:
         dockerfile: Dockerfile.training
       volumes:
         - ./training_loss.png:/app/training_loss.png
-        - ./data_scraping/bus_data.db:/app/bus_data.db
+        - ./data_scraping:/app/data_scraping
         - ./parameters:/app/parameters
     watcher:
       image: data_watcher
@@ -23,10 +23,10 @@ services:
         context: .
         dockerfile: Dockerfile.watcher
       volumes:
+        - ./data_scraping:/app/data_scraping
         - ./data_scraping/scraper.py:/app/scraper.py
         - /var/run/docker.sock:/var/run/docker.sock
         - ./compose.yaml:/app/compose.yaml
-        - ./data_scraping/bus_data.db:/app/bus_data.db
       restart: always
       depends_on:
         - scraper

@@ -21,6 +21,7 @@ STATE_DICT = torch.load(weight_path, weights_only=True)
 
 SCALER = joblib.load(f'./parameters/scaler_route_{ROUTE}.joblib')
 ENCODER = joblib.load(f'./parameters/encoder_route_{ROUTE}.joblib')
+Y_SCALER = joblib.load(f'./parameters/y_scaler_route_{ROUTE}.joblib')
 
 num_unique_buses = STATE_DICT['bus_embedding.weight'].shape[0]
 
@@ -77,7 +78,6 @@ def on_message(client, userdata, msg):
             else:
                 direction = 0.0
 
-            # Reset dictionary if date changes (first bus of the day)
             if last_seen_date is not None and date != last_seen_date:
                 last_known_delays["0.0"] = 0.0
                 last_known_delays["1.0"] = 0.0
@@ -86,7 +86,6 @@ def on_message(client, userdata, msg):
             dir_key = str(direction)
             lag_delay = last_known_delays.get(dir_key, 0.0)
 
-            # Update dictionary with current delay for the next bus
             current_delay = float(delay) if delay is not None else 0.0
             if lag_delay == 0.0:
                 last_known_delays[dir_key] = current_delay
@@ -120,9 +119,11 @@ def perform_inference(data, lag_delay):
     dummy_input[:, 2:5] = torch.tensor(SCALER.transform(dummy_input[:, 2:5]), dtype=torch.float32)
     
     with torch.no_grad():
-        prediction = MODEL(dummy_input)
+        prediction_scaled = MODEL(dummy_input)
 
-    return prediction.item()
+    prediction_unscaled = Y_SCALER.inverse_transform([[prediction_scaled.item()]])
+
+    return prediction_unscaled[0][0]
 
 
 if __name__ == '__main__':
