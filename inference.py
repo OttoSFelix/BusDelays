@@ -142,7 +142,8 @@ if __name__ == '__main__':
     errors = []
     for result in RESULTS:
         if result[1] is not None:
-            print(f'Actual: {result[0]} ----- Predicted: {result[1]:.1f}')
+            # print(f'Actual: {result[0]} ----- Predicted: {result[1]:.1f}')
             errors.append(abs(result[0] - result[1]))
     
     print(f'Mean error: {np.mean(errors):.2f}')
+    print(f'Sample size: {len(errors)}')

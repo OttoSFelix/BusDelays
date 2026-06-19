@@ -18,18 +18,21 @@ import random
 class PyTorchModel(nn.Module):
     def __init__(self, num_unique_buses):
         super().__init__()
-        self.bus_embedding = nn.Embedding(num_embeddings=num_unique_buses, embedding_dim=8)
+        self.bus_embedding = nn.Embedding(num_embeddings=num_unique_buses, embedding_dim=16)
 
         self.main_network = nn.Sequential(
-            nn.Linear(14, 256),
+            nn.Linear(22, 512),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Dropout(0.2),
+            nn.Linear(512, 512),
             nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Dropout(0.2),
             nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 1)
+            nn.Linear(128, 1)
         )
 
     def forward(self, X):
@@ -110,19 +113,20 @@ class NeuralNetwork:
 
         self.model = PyTorchModel(num_unique_buses=num_unique_buses)
 
-        learning_rate = 0.001
-        batch_size = 2048
+        learning_rate = 0.0005
+        batch_size = 4096
 
         self.net = NeuralNet(
             module=self.model,
             criterion=nn.MSELoss,
             optimizer=optim.Adam,
             lr=learning_rate,
-            max_epochs=50,
+            max_epochs=100,
             batch_size=batch_size,
             train_split=ValidSplit(cv=0.2)
         )
 
+        print('Started training...')
         self.net.fit(X_train_scaled, y_train_scaled)
 
         losses = self.net.history[:, 'train_loss']
