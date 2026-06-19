@@ -11,7 +11,8 @@ MQTT_PORT = 8883
 MQTT_TOPIC = "/hfp/v2/journey/+/+/+/+/+/1056/#"
 MESSAGE_DATA = []
 
-db_conn = sqlite3.connect('bus_data.db', check_same_thread=False)
+db_path = 'data_scraping/bus_data.db' if os.path.exists('data_scraping') else 'bus_data.db'
+db_conn = sqlite3.connect(db_path, check_same_thread=False)
 cursor = db_conn.cursor()
 
 def on_connect(client, userdata, flags, rc):
